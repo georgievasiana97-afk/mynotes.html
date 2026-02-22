@@ -1,0 +1,2 @@
+# mynotes.html
+smartnotes
