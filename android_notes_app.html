@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My Smart Notes</title>
+<style>
+  body{font-family:system-ui,Arial;margin:0;background:#0f1115;color:#eee}
+  header{padding:12px 16px;background:#151922;display:flex;gap:8px;flex-wrap:wrap;position:sticky;top:0}
+  button,select{background:#222836;border:none;color:#fff;padding:8px 10px;border-radius:8px;cursor:pointer}
+  button:hover{background:#2e3547}
+  #editor{min-height:70vh;padding:16px;outline:none}
+  .note-list{position:fixed;right:0;top:60px;width:180px;max-height:70vh;overflow:auto;background:#151922;border-left:1px solid #333}
+  .note-item{padding:8px;border-bottom:1px solid #333;cursor:pointer}
+  .note-item:hover{background:#1e2432}
+  .file{display:block;margin:6px 0;padding:6px;background:#1d2230;border-radius:6px}
+</style>
+</head>
+<body>
+<header>
+  <button onclick="newNote()">New</button>
+  <button onclick="saveNote()">Save</button>
+  <button onclick="bold()">Bold</button>
+  <button onclick="highlight('yellow')">Yellow</button>
+  <button onclick="highlight('lightgreen')">Green</button>
+  <button onclick="highlight('lightblue')">Blue</button>
+  <button onclick="speak()">🔊 Read</button>
+  <button onclick="startDictation()">🎤 Voice → Text</button>
+  <button onclick="uploadImage()">📷 Photo</button>
+  <button onclick="uploadFile()">📎 File</button>
+  <button onclick="ocrImage()">🧠 Image → Text</button>
+  <select id="lang">
+    <option value="es">Spanish</option>
+    <option value="de">German</option>
+    <option value="fr">French</option>
+    <option value="bg">Bulgarian</option>
+    <option value="en">English</option>
+  </select>
+  <button onclick="translateText()">🌐 Translate</button>
+</header>
+
+<div id="editor" contenteditable="true">Start typing your notes...</div>
+<div class="note-list" id="noteList"></div>
+
+<input type="file" id="imgInput" accept="image/*" hidden>
+<input type="file" id="fileInput" hidden>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+let currentNote='note1';
+
+function bold(){document.execCommand('bold');}
+function highlight(color){document.execCommand('hiliteColor',false,color);} 
+
+function newNote(){
+  currentNote='note'+Date.now();
+  document.getElementById('editor').innerHTML='';
+}
+
+function saveNote(){
+  localStorage.setItem(currentNote,document.getElementById('editor').innerHTML);
+  loadNotes();
+  alert('Saved');
+}
+
+function loadNotes(){
+  const list=document.getElementById('noteList');
+  list.innerHTML='';
+  for(let i=0;i<localStorage.length;i++){
+    let key=localStorage.key(i);
+    if(key.startsWith('note')){
+      let div=document.createElement('div');
+      div.className='note-item';
+      div.innerText=key;
+      div.onclick=()=>{currentNote=key;document.getElementById('editor').innerHTML=localStorage.getItem(key)};
+      list.appendChild(div);
+    }
+  }
+}
+loadNotes();
+
+// speech to text
+function startDictation(){
+  const rec=new(window.SpeechRecognition||window.webkitSpeechRecognition)();
+  rec.lang='en-US';
+  rec.onresult=e=>{
+    document.execCommand('insertText',false,e.results[0][0].transcript);
+  };
+  rec.start();
+}
+
+// read aloud
+function speak(){
+  let text=document.getElementById('editor').innerText;
+  let utter=new SpeechSynthesisUtterance(text);
+  speechSynthesis.speak(utter);
+}
+
+// upload image
+function uploadImage(){document.getElementById('imgInput').click();}
+imgInput.onchange=e=>{
+  let file=e.target.files[0];
+  let reader=new FileReader();
+  reader.onload=()=>{
+    document.execCommand('insertHTML',false,`<img src='${reader.result}' style='max-width:100%'>`);
+  };
+  reader.readAsDataURL(file);
+};
+
+// upload file
+function uploadFile(){document.getElementById('fileInput').click();}
+fileInput.onchange=e=>{
+  let file=e.target.files[0];
+  let reader=new FileReader();
+  reader.onload=()=>{
+    document.execCommand('insertHTML',false,`<a class='file' download='${file.name}' href='${reader.result}'>${file.name}</a>`);
+  };
+  reader.readAsDataURL(file);
+};
+
+// OCR image to text
+async function ocrImage(){
+  uploadImage();
+  imgInput.onchange=async e=>{
+    let file=e.target.files[0];
+    const { data:{text} }=await Tesseract.recognize(file,'eng');
+    document.execCommand('insertText',false,'\n'+text+'\n');
+  };
+}
+
+// translate
+async function translateText(){
+  let selection=window.getSelection().toString();
+  if(!selection){alert('Select text first');return;}
+  let target=document.getElementById('lang').value;
+  let res=await fetch('https://libretranslate.de/translate',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({q:selection,source:'auto',target:target,format:'text'})
+  });
+  let data=await res.json();
+  document.execCommand('insertText',false,'\n['+data.translatedText+']\n');
+}
+</script>
+</body>
+</html>
